@@ -27,27 +27,32 @@ from daemon import Daemon
 import logging
 import gaugette.rotary_encoder as rotary_encoder
 
-import encoderd-settings as settings
+import encoderd_settings as settings
+import os.path
 
 class MyDaemon(Daemon):
   def run(self):
-    setup()
+    self.setup()
     while True:
       for enc in self.encoders:
         steps = enc['obj'].get_delta()
         if steps != 0:
           enc['angle'] += enc['calibration']*steps
+          self.saveAngle(enc) 
           self.logger.info("Encoder {}: {} movement detected. Angle is now {} degrees.".format(enc['number'],enc['name'],enc['angle']))
-        saveAngle(enc) 
 
-      time.sleep(settings.REFRESH_RATE)
+      #time.sleep(settings.REFRESH_RATE)
+      time.sleep(1)
 
   def setup(self):
-    setupLogger()
+    with open(os.path.join(settings.DIR,'testlog.log'),'w') as log:
+      log.write("started\n")
+    self.setupLogger()
     self.logger.info("Encoderd started.")
-    setupEncoders()
+    self.setupEncoders()
 
   def setupLogger(self):
+    pass
     # set up logger
     self.logger = logging.getLogger(__name__)
     self.logger.setLevel(logging.DEBUG)
@@ -55,7 +60,7 @@ class MyDaemon(Daemon):
     fh = logging.FileHandler(settings.LOG_FILE)
     fh.setLevel(logging.DEBUG)
     # format logging
-    fformatter = logging.Formatter('(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    fformatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     fh.setFormatter(fformatter)
     self.logger.addHandler(fh)
 
@@ -67,12 +72,12 @@ class MyDaemon(Daemon):
       pinA=enc['pinA']
       pinB=enc['pinB']
       # start a monitoring thread
-      self.encoders[enc_cnt]['obj'] = rotary_encoder.Worker(pinA,pinB)
+      self.encoders[enc_cnt]['obj'] = rotary_encoder.RotaryEncoder.Worker(pinA,pinB)
       self.encoders[enc_cnt]['number'] = enc_cnt
       self.encoders[enc_cnt]['obj'].start()
       self.logger.info("Encoder {}: {} registered. Worker thread started.".format(enc_cnt,enc['name']))
       # read recorded angle if log file exists
-      readAngle(enc)
+      self.readAngle(enc)
       enc_cnt += 1
 
     self.encoder_count = enc_cnt
@@ -80,18 +85,19 @@ class MyDaemon(Daemon):
       
   def readAngle(self, encoder):
     try: 
-      with open(encoder.logfile, 'r') as fi:
-        angle = float(fi.readline())
-    except IOError:
-      angle = 0.0
-    self.logger.info("Encoder: {}: {} angle set to {} degrees.".format(encoder['number'],encoder['name'],angle))
-    self.encoders[enc_cnt]['angle'] = angle
-    return angle
+      with open(encoder['logfile'], 'r') as fi:
+        encoder['angle'] = float(fi.readline())
+    except:
+      encoder['angle'] = 0.0
+      self.saveAngle(encoder)
+    msg = "Encoder: {}: {} angle set to {} degrees."
+    self.logger.info(msg.format(encoder['number'],encoder['name'],encoder['angle']))
+    return encoder['angle']
 
   def saveAngle(self, encoder):
     angle = encoder['angle']
-    with open(encoder.logfile, 'w') as fo:
-      fo.write(str())
+    with open(encoder['logfile'], 'w') as fo:
+      fo.write(str(angle))
     self.logger.debug("Encoder: {}: {} angle recorded as {} degrees.".format(encoder['number'],encoder['name'],angle))
 
   def zero(self):
@@ -102,15 +108,18 @@ class MyDaemon(Daemon):
 
 if __name__ == "__main__":
   daemon = MyDaemon(settings.PID_FILE)
+  #daemon = MyDaemon('/tmp/daemon-example.pid')
   if len(sys.argv) == 2:
     if 'start' == sys.argv[1]:
       daemon.start()
+    if 'foreground' == sys.argv[1]:# for debugging
+      daemon.run()
     elif 'stop' == sys.argv[1]:
       daemon.stop()
     elif 'restart' == sys.argv[1]:
       daemon.restart()
-    elif 'zero' == sys.argv[1]:
-      daemon.zero()
+#    elif 'zero' == sys.argv[1]:
+#      daemon.zero()
     else:
       print "Unknown command"
       sys.exit(2)

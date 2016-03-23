@@ -1,7 +1,7 @@
 import os.path
 
 # working directory for daemon logs and persistance files
-DIR = os.path.expanduser('~/.encoderd/')
+DIR = '/home/pi/.encoderd/'
 
 # stores current system pid
 PID_FILE=os.path.join(DIR,'encoderd.pid')

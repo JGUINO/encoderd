@@ -47,6 +47,7 @@ class Daemon:
     # do second fork
     try: 
       pid = os.fork() 
+      sys.stdout.write("fork #2 pid: %d\n" % pid)
       if pid > 0:
         # exit from second parent
         sys.exit(0) 
